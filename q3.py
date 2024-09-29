@@ -93,11 +93,6 @@ class Question3:
         self.train_data = datasets.FashionMNIST(root='data', train=True, download=True, transform=ToTensor())
         self.test_data = datasets.FashionMNIST(root='data', train=False, download=True, transform=ToTensor())
 
-    def reset_model_parameters(self, model):
-        for layer in model.children():
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
-
     def calculate_accuracy(self, probs, labels):
         predictions = torch.argmax(probs, dim=1)
         correct = (predictions == labels).sum().item()
@@ -127,12 +122,12 @@ class Question3:
 
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-09)
         factor = (1e1/1e-9)**(1/total_iters)
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=(lambda epoch: factor))
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=(lambda epoch: factor**(epoch)))
 
         lrs = []
         training_losses_for_lr = []
         for _ in range(N):
-            for _, (batch, labels) in enumerate(train_dl):
+            for _, (batch, labels) in tqdm(enumerate(train_dl), total=len(train_dl)):
                 batch, labels = batch.to(self.device), labels.to(self.device)
                 batch = batch.repeat(1, 3, 1, 1)
 
@@ -157,7 +152,7 @@ class Question3:
         plt.savefig('q3-part1.png')
 
     def part2(self):
-        LR_MIN = 1e-05
+        LR_MIN = 1e-06
         LR_MAX = 1e-01
         BATCH_SIZE = 64
         N = 5
@@ -171,12 +166,12 @@ class Question3:
         training_accuracy_for_iteration = []
         validation_accuracy_for_iteration = []
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=LR_MIN)
-        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=LR_MIN, max_lr=LR_MAX)
+        optimizer = torch.optim.SGD(model.parameters(), lr=LR_MIN)
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=LR_MIN, max_lr=LR_MAX, mode='exp_range', gamma=0.99994)
 
         iter = 0
-        for _ in tqdm(range(N)):
-            for _, (batch, labels) in enumerate(train_dl):
+        for _ in range(N):
+            for _, (batch, labels) in tqdm(enumerate(train_dl), total=len(train_dl)):
                 batch, labels = batch.to(self.device), labels.to(self.device)
                 batch = batch.repeat(1, 3, 1, 1)
 
@@ -188,7 +183,8 @@ class Question3:
                 optimizer.step()
                 scheduler.step()
 
-                if iter % 100 == 0:
+                if iter % 10 == 0:
+
                     val_loss, val_accuracy = self.calculate_val_loss_and_accuracy(model, loss_fn, val_dl)
                     train_loss, train_accuracy = loss.item(), self.calculate_accuracy(batch_prediction, labels)
 
@@ -196,13 +192,10 @@ class Question3:
                     validation_losses_for_iteration.append(val_loss)
                     training_accuracy_for_iteration.append(train_accuracy)
                     validation_accuracy_for_iteration.append(val_accuracy)
-
+                
                 iter += 1
-                break
         
         plt.figure()
-        plt.yscale('log')
-        plt.xscale('log')
         plt.xlabel("Iterations")
         plt.ylabel("Cross Entropy Loss")
         plt.title("Fashion MNIST Losses")
@@ -212,8 +205,6 @@ class Question3:
         plt.savefig('q3-part2-loss.png')
 
         plt.figure()
-        plt.yscale('log')
-        plt.xscale('log')
         plt.xlabel("Iterations")
         plt.ylabel("Accuracy")
         plt.title("Fashion MNIST Accuracy")
@@ -223,10 +214,43 @@ class Question3:
         plt.savefig('q3-part2-accuracy.png')
 
     def part3(self):
-        pass
+        LR_MAX = 1e-01
+        N = 9
+        model = InceptionSmall().to(self.device)
+        loss_fn = nn.CrossEntropyLoss()
+
+        optimizer = torch.optim.SGD(model.parameters(), lr=LR_MAX)
+
+        training_losses_for_batch_size = []
+
+        for epoch in range(N):
+            train_dl = DataLoader(self.train_data, batch_size = 2**(5 + epoch))
+
+            for _, (batch, labels) in tqdm(enumerate(train_dl), total=len(train_dl)):
+                batch, labels = batch.to(self.device), labels.to(self.device)
+                batch = batch.repeat(1, 3, 1, 1)
+
+                batch_prediction = model(batch)
+                loss = loss_fn(batch_prediction, labels)
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                training_losses_for_batch_size.append(loss.item())
+
+        plt.figure()
+        plt.yscale('log')
+        plt.xlabel("Batch Size")
+        plt.ylabel("Cross Entropy Loss")
+        plt.title("Fashion MNIST")
+        plt.plot(training_losses_for_batch_size)
+        plt.xticks([])
+        plt.savefig('q3-part3.png')
+
 
 if __name__ == '__main__':
     q3 = Question3()
-    q3.part1()
+    #q3.part1()
     #q3.part2()
-    #q3.part3()
+    q3.part3()
