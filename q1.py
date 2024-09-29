@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import random
-import warnings
 import numpy as np
 from collections import defaultdict
 from sklearn.linear_model import Ridge
