@@ -123,29 +123,29 @@ class Question3:
         model = InceptionSmall().to(self.device)
         train_dl = DataLoader(self.train_data, batch_size = BATCH_SIZE)
         loss_fn = nn.CrossEntropyLoss()
+        total_iters = N * len(train_dl)
 
-        candidate_lrs = [1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1]
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-09)
+        factor = (1e1/1e-9)**(1/total_iters)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=(lambda epoch: factor))
+
+        lrs = []
         training_losses_for_lr = []
+        for _ in range(N):
+            for _, (batch, labels) in enumerate(train_dl):
+                batch, labels = batch.to(self.device), labels.to(self.device)
+                batch = batch.repeat(1, 3, 1, 1)
 
-        for lr in tqdm(candidate_lrs):
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-            for _ in range(N):
-                train_losses = np.array([])
-                for _, (batch, labels) in enumerate(train_dl):
-                    batch, labels = batch.to(self.device), labels.to(self.device)
-                    batch = batch.repeat(1, 3, 1, 1)
+                batch_prediction = model(batch)
+                loss = loss_fn(batch_prediction, labels)
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
-                    batch_prediction = model(batch)
-                    loss = loss_fn(batch_prediction, labels)
-                    
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-
-                    train_losses = np.append(train_losses, loss.item())
-
-                loss = np.mean(train_losses)
-            training_losses_for_lr.append(loss) 
+                lrs.append(scheduler.get_last_lr())
+                training_losses_for_lr.append(loss.item())
         
         plt.figure()
         plt.yscale('log')
@@ -153,7 +153,7 @@ class Question3:
         plt.xlabel("Learning Rate")
         plt.ylabel("Cross Entropy Loss")
         plt.title("Fashion MNIST")
-        plt.plot(candidate_lrs, training_losses_for_lr)
+        plt.plot(lrs, training_losses_for_lr)
         plt.savefig('q3-part1.png')
 
     def part2(self):
@@ -227,6 +227,6 @@ class Question3:
 
 if __name__ == '__main__':
     q3 = Question3()
-    #q3.part1()
-    q3.part2()
-    q3.part3()
+    q3.part1()
+    #q3.part2()
+    #q3.part3()
